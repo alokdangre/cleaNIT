@@ -3,6 +3,7 @@ import { PORT } from './src/config/env.js';
 import { connectDatabase } from './src/config/database.js';
 import authRoutes from './src/routes/authRoutes.js';
 import protectedRoutes from './src/routes/protectedRoutes.js';
+import complaintRoutes from './src/routes/complaintRoutes.js';
 
 const app = express();
 
@@ -10,6 +11,7 @@ app.use(express.json());
 
 app.use('/auth', authRoutes);
 app.use('/', protectedRoutes);
+app.use('/complaint', complaintRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
