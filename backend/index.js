@@ -23,6 +23,7 @@ app.use(express.json());
 app.use('/auth', authRoutes);
 app.use('/cloudinary', cloudinaryRoutes);
 app.use('/', protectedRoutes);
+app.use('/complaint', complaintRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
