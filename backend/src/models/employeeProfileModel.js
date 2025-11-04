@@ -39,6 +39,16 @@ const employeeProfileSchema = new mongoose.Schema(
           completedAt: {
             type: Date,
           },
+          cleanlinessScore: {
+            type: Number,
+            min: 0,
+            max: 100,
+            default: null, // will be filled after script analysis
+          },
+          complaintId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Complaint',
+          },
         },
       ],
       default: [],
