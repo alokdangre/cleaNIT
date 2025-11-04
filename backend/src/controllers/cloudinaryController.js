@@ -2,13 +2,13 @@ import { deleter, uploader } from "../services/cloudinaryService.js";
 
 export const uploadHandler  = async (req, res) => {
   let img = req.files?.img;
-  const {folder} = req.body;
+  const {folder, name} = req.body;
   
   try {
     if (img) {
+      console.log(img, folder, name);
         console.log("Image received");
-        console.log("Folder : ", folder);
-        const up = await uploader(img, folder);
+        const up = await uploader(img, folder, name);
         console.log("Img upload successful:", up);
     }
 
@@ -30,6 +30,7 @@ export const deleteHandler = async(req, res) => {
   const {public_id} = req.body;
   try {
     if (public_id) {
+      console.log(public_id);
         await deleter(public_id);
         console.log("Img deletion successful");
     }

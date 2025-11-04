@@ -42,6 +42,22 @@ const complaintSchema = new mongoose.Schema(
                type: Date,
                default: null,
           },
+
+          url:{
+               type:String,
+          },
+
+          imagePublicId:{
+               type:String,
+          },
+
+          cleanedImgUrl: {
+               type :String,
+          },
+
+          cleanedImgPublicId :{
+               type : String,
+          }
      },
      {
           timestamps: true,

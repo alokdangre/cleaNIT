@@ -6,6 +6,7 @@ import {connectCloudinary} from "./src/config/cloudinaryConfig.js";
 import authRoutes from './src/routes/authRoutes.js';
 import protectedRoutes from './src/routes/protectedRoutes.js';
 import cloudinaryRoutes from './src/routes/cloudinaryRoutes.js';
+import complaintRoutes from './src/routes/complaintRoutes.js'
 
 const app = express();
 
