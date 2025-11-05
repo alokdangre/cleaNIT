@@ -6,9 +6,12 @@ import {connectCloudinary} from "./src/config/cloudinaryConfig.js";
 import authRoutes from './src/routes/authRoutes.js';
 import protectedRoutes from './src/routes/protectedRoutes.js';
 import cloudinaryRoutes from './src/routes/cloudinaryRoutes.js';
+import complaintRoutes from './src/routes/complaintRoutes.js'
+import roboflowRoutes from "./src/routes/robloxflowRoutes.js";
 
 const app = express();
 
+// Correct order:
 app.use(
   fileUpload({
     useTempFiles: true,
@@ -17,13 +20,16 @@ app.use(
   })
 );
 
+// Then body parsers
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
+
+app.use('/complaint', complaintRoutes);
 app.use('/auth', authRoutes);
 app.use('/cloudinary', cloudinaryRoutes);
 app.use('/', protectedRoutes);
-app.use('/complaint', complaintRoutes);
+app.use("/roboflow", roboflowRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
