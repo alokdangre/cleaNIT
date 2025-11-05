@@ -94,81 +94,97 @@ export const assignComplaintToEmployee = async (req, res) => {
 };
 
 export const submitWork = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { complaintId, description } = req.body;
-    const { cleanedImg } = req.files;
+     try {
+          console.log("Raw headers:", req.headers["content-type"]);
+          console.log("req.files:", req.files);
+          console.log("req.body:", req.body);
+          const userId = req.user.id;
+          const { complaintId, description } = req.body;
+          const { cleanedImg } = req.files;
 
-    if (!complaintId || !description) {
-      return res.status(400).json({ message: "Complaint ID and description are required." });
-    }
+          if (!complaintId || !description) {
+               return res.status(400).json({ message: "Complaint ID and description are required." });
+          }
 
-    const employee = await EmployeeProfile.findOne({ user: userId });
-    if (!employee) return res.status(404).json({ message: "Employee profile not found." });
+          const employee = await EmployeeProfile.findOne({ user: userId });
+          if (!employee) return res.status(404).json({ message: "Employee profile not found." });
 
-    const complaint = await Complaint.findById(complaintId);
-    if (!complaint) return res.status(404).json({ message: "Complaint not found." });
+          const complaint = await Complaint.findById(complaintId);
+          if (!complaint) return res.status(404).json({ message: "Complaint not found." });
 
-    if (String(complaint.assignedTo) !== String(employee._id)) {
-      return res.status(403).json({ message: "You are not assigned to this complaint." });
-    }
+          if (String(complaint.assignedTo) !== String(employee._id)) {
+               return res.status(403).json({ message: "You are not assigned to this complaint." });
+          }
 
-    const { folderName, fileName } = complaint;
+          const { folderName, fileName } = complaint;
 
-    // Upload cleaned image to Cloudinary
-    const up = await uploader(cleanedImg, folderName, fileName);
-    complaint.cleanedImgUrl = up.url;
-    complaint.cleanedImgPublicId = up.public_id;
+          // Upload cleaned image to Cloudinary
+          const up = await uploader(cleanedImg, folderName, fileName);
+          complaint.cleanedImgUrl = up.url;
+          complaint.cleanedImgPublicId = up.public_id;
 
-    // --- Python process execution ---
-    const pythonPath = getPythonPath();
-    const scriptPath = path.join(__dirname, "../scripts/roboflow_analysis.py");
-    const imageUrl = up.url;
+          // --- Python process execution ---
+          const pythonPath = getPythonPath();
+          const scriptPath = path.join(__dirname, "../../scripts/robloxflowAnalysis.py");
+          console.log("Resolved Python script path:", scriptPath);
 
-    const process = spawn(pythonPath, [scriptPath, imageUrl]);
+          const imageUrl = up.url;
 
-    let output = "";
+          const process = spawn(pythonPath, [scriptPath, imageUrl]);
 
-    process.stdout.on("data", (data) => {
-      output += data.toString();
-    });
+          let output = "";
 
-    process.stderr.on("data", (data) => {
-      console.error("Python error:", data.toString());
-    });
+          process.stdout.on("data", (data) => {
+               output += data.toString();
+          });
 
-    process.on("close", async (code) => {
-      if (code !== 0) {
-        console.error(`Python exited with code ${code}`);
-        return res.status(500).json({ message: "Image analysis failed." });
-      }
+          process.stderr.on("data", (data) => {
+               console.error("Python error:", data.toString());
+          });
 
-      const cleanlinessScore = parseFloat(output.trim());
+          process.on("close", async (code) => {
+               if (code !== 0) {
+                    console.error(`Python exited with code ${code}`);
+                    return res.status(500).json({ message: "Image analysis failed." });
+               }
+               console.log("Python raw output:", output);
 
-      complaint.status = "completed";
-      complaint.resolvedAt = new Date();
-      complaint.cleanlinessScore = cleanlinessScore;
-      await complaint.save();
+               // Extract "Final Cleanliness% (after penalty) = 27.09%"
+               const match = output.match(/Final Cleanliness%.*?=\s*([\d.]+)/i);
+               const cleanlinessScore = match ? parseFloat(match[1]) : NaN;
 
-      employee.workDone.push({
-        description,
-        completedAt: new Date(),
-        cleanlinessScore,
-      });
-      await employee.save();
+               if (isNaN(cleanlinessScore)) {
+                    console.error("Could not parse cleanliness score from Python output:", output);
+                    return res.status(500).json({
+                         message: "Invalid cleanliness score returned by analysis script.",
+                         rawOutput: output,
+                    });
+               }
 
-      return res.status(200).json({
-        message: "Work submitted successfully.",
-        complaintId: complaint._id,
-        cleanlinessScore,
-        resolvedAt: complaint.resolvedAt,
-      });
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      message: "Error submitting work.",
-      error: error.message,
-    });
-  }
+               complaint.status = "completed";
+               complaint.resolvedAt = new Date();
+               complaint.cleanlinessScore = cleanlinessScore;
+               await complaint.save();
+
+               employee.workDone.push({
+                    description,
+                    completedAt: new Date(),
+                    cleanlinessScore,
+               });
+               await employee.save();
+
+               return res.status(200).json({
+                    message: "Work submitted successfully.",
+                    complaintId: complaint._id,
+                    cleanlinessScore,
+                    resolvedAt: complaint.resolvedAt,
+               });
+          });
+     } catch (error) {
+          console.error(error);
+          res.status(500).json({
+               message: "Error submitting work.",
+               error: error.message,
+          });
+     }
 };
