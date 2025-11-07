@@ -7,15 +7,6 @@ export function fmtDate(iso) {
   }
 }
 
-export function fileToDataURL(file) {
-  return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res(r.result);
-    r.onerror = rej;
-    r.readAsDataURL(file);
-  });
-}
-
 export const readStoredAuth = () => {
   try {
     const raw = localStorage.getItem("cleanspot.auth");
@@ -33,22 +24,6 @@ export const persistAuth = (auth) => {
     return;
   }
   localStorage.setItem("cleanspot.auth", JSON.stringify(auth));
-};
-
-const MOCK_COMPLAINTS_KEY = "cleanspot.mockComplaints";
-
-export const readMockComplaints = () => {
-  try {
-    return JSON.parse(localStorage.getItem(MOCK_COMPLAINTS_KEY) || "[]");
-  } catch (e) {
-    console.warn("Unable to parse mock complaints", e);
-    localStorage.removeItem(MOCK_COMPLAINTS_KEY);
-    return [];
-  }
-};
-
-export const writeMockComplaints = (rows) => {
-  localStorage.setItem(MOCK_COMPLAINTS_KEY, JSON.stringify(rows));
 };
 
 export const normalizeComplaint = (raw) => {
