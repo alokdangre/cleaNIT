@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 
 export default function CleanSpotApp() {
   // ===== Toast =====
@@ -19,16 +19,31 @@ export default function CleanSpotApp() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
+  // ===== Auth =====
+  const [auth, setAuth] = useState(() => readStoredAuth());
+
+  const updateAuth = useCallback((nextAuth) => {
+    persistAuth(nextAuth);
+    setAuth(nextAuth);
+  }, []);
+
+  const logout = useCallback(() => {
+    persistAuth(null);
+    setAuth(null);
+    showToast("Logged out");
+    window.location.hash = "#";
+  }, [showToast]);
+
   return (
     <div>
       <StyleBlock />
       <Header />
       <main className="container">
         {route === "" && <Landing />}
-        {route === "#student-login" && <StudentLogin showToast={showToast} />}
-        {route === "#admin-login" && <AdminLogin showToast={showToast} />}
-        {route === "#student" && <StudentDashboard showToast={showToast} />}
-        {route === "#admin" && <AdminDashboard showToast={showToast} />}
+        {route === "#student-login" && <StudentLogin showToast={showToast} onAuth={updateAuth} />}
+        {route === "#admin-login" && <AdminLogin showToast={showToast} onAuth={updateAuth} />}
+        {route === "#student" && <StudentDashboard showToast={showToast} auth={auth} onLogout={logout} />}
+        {route === "#admin" && <AdminDashboard showToast={showToast} auth={auth} onLogout={logout} />}
         {!("#", "#student-login", "#admin-login", "#student", "#admin").includes(route) && (
           <NotFound />
         )}
@@ -104,143 +119,353 @@ function Landing() {
 /*************************
  * API (Mockable)
  *************************/
-const API_BASE = "";
-const MOCK = true; // Toggle to false when wiring to backend
+const API_BASE = (import.meta.env.VITE_API_BASE || "http://localhost:3000").replace(/\/$/, "");
+const MOCK = import.meta.env.VITE_USE_MOCK === "1";
+const STORAGE_KEY = "cleanspot.auth";
+
+const readStoredAuth = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    console.warn("Unable to parse stored auth", e);
+    localStorage.removeItem(STORAGE_KEY);
+    return null;
+  }
+};
+
+const persistAuth = (auth) => {
+  if (!auth) {
+    localStorage.removeItem(STORAGE_KEY);
+    return;
+  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(auth));
+};
+
+const MOCK_COMPLAINTS_KEY = "cleanspot.mockComplaints";
+
+const readMockComplaints = () => {
+  try {
+    return JSON.parse(localStorage.getItem(MOCK_COMPLAINTS_KEY) || "[]");
+  } catch (e) {
+    console.warn("Unable to parse mock complaints", e);
+    localStorage.removeItem(MOCK_COMPLAINTS_KEY);
+    return [];
+  }
+};
+
+const writeMockComplaints = (rows) => {
+  localStorage.setItem(MOCK_COMPLAINTS_KEY, JSON.stringify(rows));
+};
+
+const normalizeComplaint = (raw) => {
+  if (!raw) return null;
+  const complaint = raw.complaint ?? raw;
+  if (!complaint) return null;
+  const id = complaint._id || raw.id || complaint.id || null;
+  return {
+    id,
+    area: complaint.area || "",
+    studentId: complaint.studentId || "",
+    description: complaint.description || "",
+    status: complaint.status || "pending",
+    createdAt: complaint.createdAt || complaint.updatedAt || null,
+    url: complaint.url || "",
+    cleanedImgUrl: complaint.cleanedImgUrl || "",
+    resolvedAt: complaint.resolvedAt || null,
+    cleanlinessScore: typeof complaint.cleanlinessScore === "number" ? complaint.cleanlinessScore : null,
+    assignedTo: complaint.assignedTo || null,
+  };
+};
+
+const mapStatusToDisplay = (status) => {
+  const normalized = (status || "pending").toString().toLowerCase();
+  if (normalized === "pending") return "PENDING";
+  if (normalized === "assigned") return "IN_PROGRESS";
+  if (normalized === "completed") return "CLEANED";
+  return status?.toString().toUpperCase() || "PENDING";
+};
+
+const toReportRow = (complaint) => {
+  const normalized = normalizeComplaint(complaint);
+  if (!normalized) return null;
+  return {
+    id: normalized.id || `${normalized.studentId}-${normalized.createdAt || Date.now()}`,
+    location: normalized.area || "",
+    description: normalized.description || "",
+    createdAt: normalized.createdAt,
+    status: mapStatusToDisplay(normalized.status),
+    beforeUrl: normalized.url || "",
+    afterUrl: normalized.cleanedImgUrl || "",
+    cleanedAt: normalized.resolvedAt || null,
+    ai: typeof normalized.cleanlinessScore === "number" ? { cleanedPercent: Math.round(normalized.cleanlinessScore) } : null,
+    assignedTo: normalized.assignedTo || null,
+    rawStatus: normalized.status || "pending",
+  };
+};
+
+const buildAuthHeaders = (token, extra = {}) => {
+  const headers = { ...extra };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+};
+
+const parseJsonResponse = async (res, fallbackMessage) => {
+  if (!res.ok) {
+    let message = fallbackMessage;
+    try {
+      const data = await res.json();
+      if (data?.message) message = data.message;
+    } catch (error) {
+      /* no-op */
+    }
+    throw new Error(message || `Request failed with status ${res.status}`);
+  }
+  return res.json();
+};
 
 const api = {
-  async studentLogin({ email, password }) {
+  async studentLogin({ username, password }) {
     if (MOCK) {
-      localStorage.setItem("student", JSON.stringify({ id: "stu-001", name: "Student", email }));
-      return { token: "demo", student: { id: "stu-001", name: "Student", email } };
-    }
-    const res = await fetch(`${API_BASE}/auth/student/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password })
-    });
-    if (!res.ok) throw new Error("Login failed");
-    return res.json();
-  },
-  async adminLogin({ email, password }) {
-    if (MOCK) {
-      localStorage.setItem("admin", JSON.stringify({ id: "adm-001", name: "Admin", email }));
-      return { token: "demo", admin: { id: "adm-001", name: "Admin", email } };
-    }
-    const res = await fetch(`${API_BASE}/auth/admin/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password })
-    });
-    if (!res.ok) throw new Error("Login failed");
-    return res.json();
-  },
-  async createReport({ location, description, beforeFile }) {
-    if (MOCK) {
-      const all = JSON.parse(localStorage.getItem("reports") || "[]");
-      const student = JSON.parse(localStorage.getItem("student"));
-      const id = "r" + (all.length + 1).toString().padStart(3, "0");
-      const now = new Date().toISOString();
-      const url = await fileToDataURL(beforeFile);
-      const row = {
-        id,
-        studentId: student?.id,
-        location,
-        description,
-        beforeUrl: url,
-        afterUrl: null,
-        status: "PENDING",
-        createdAt: now,
-        assignedTo: null,
-        cleanedAt: null,
-        ai: null,
+      return {
+        token: "demo",
+        user: { id: "stu-001", username: username || "student", role: "student" },
       };
-      all.push(row);
-      localStorage.setItem("reports", JSON.stringify(all));
-      return row;
     }
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await parseJsonResponse(res, "Login failed");
+    if (data?.user?.role !== "student") {
+      throw new Error("Account is not registered as a student");
+    }
+    return data;
+  },
+  async adminLogin({ username, password }) {
+    if (MOCK) {
+      return {
+        token: "demo",
+        user: { id: "adm-001", username: username || "employee", role: "employee" },
+      };
+    }
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await parseJsonResponse(res, "Login failed");
+    if (data?.user?.role !== "employee") {
+      throw new Error("Account is not registered as an employee");
+    }
+    return data;
+  },
+  async listStudentComplaints({ token }) {
+    if (!token && !MOCK) throw new Error("Missing authentication token");
+
+    if (MOCK) {
+      const auth = readStoredAuth();
+      const username = auth?.user?.username;
+      return readMockComplaints()
+        .filter((row) => !username || row.studentId === username)
+        .map((row) => normalizeComplaint(row))
+        .filter(Boolean);
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/student/dashboard`, {
+        method: "GET",
+        headers: buildAuthHeaders(token),
+      });
+      const data = await parseJsonResponse(res, "Failed to load complaints");
+      if (Array.isArray(data?.complaints)) {
+        return data.complaints.map((item) => normalizeComplaint(item)).filter(Boolean);
+      }
+      if (Array.isArray(data?.reportedComplaints)) {
+        return data.reportedComplaints.map((item) => normalizeComplaint(item)).filter(Boolean);
+      }
+      return [];
+    } catch (err) {
+      console.warn("Unable to load student complaints", err);
+      return [];
+    }
+  },
+  async submitComplaint({ token, area, rollNo, description, proofImg }) {
+    if (!MOCK) {
+      if (!token) throw new Error("Missing authentication token");
+      if (!area) throw new Error("Area is required");
+      if (!rollNo) throw new Error("Roll number is required");
+      if (!proofImg) throw new Error("Proof image is required");
+    }
+
+    if (MOCK) {
+      const id = `cmp-${Date.now()}`;
+      const url = proofImg ? await fileToDataURL(proofImg) : "";
+      const complaint = {
+        _id: id,
+        area,
+        studentId: rollNo,
+        description,
+        status: "pending",
+        url,
+        createdAt: new Date().toISOString(),
+      };
+      const rows = readMockComplaints();
+      rows.unshift(complaint);
+      writeMockComplaints(rows);
+      return {
+        message: "Complaint saved (mock)",
+        complaint: normalizeComplaint(complaint),
+      };
+    }
+
     const fd = new FormData();
-    fd.append("location", location);
-    fd.append("description", description);
-    fd.append("beforeImage", beforeFile);
-    const res = await fetch(`${API_BASE}/student/reports`, { method: "POST", body: fd });
-    if (!res.ok) throw new Error("Failed to submit");
-    return res.json();
+    fd.append("area", area);
+    fd.append("rollNo", rollNo);
+    if (description) fd.append("description", description);
+    fd.append("proofImg", proofImg);
+
+    const res = await fetch(`${API_BASE}/complaint/submitComplaint`, {
+      method: "POST",
+      headers: buildAuthHeaders(token),
+      body: fd,
+    });
+    const data = await parseJsonResponse(res, "Failed to submit complaint");
+    return {
+      message: data.message || "Complaint submitted successfully",
+      complaint: normalizeComplaint(data),
+    };
   },
-  async listStudentReports() {
+  async receiveComplaint({ token }) {
+    if (!MOCK && !token) throw new Error("Missing authentication token");
+
     if (MOCK) {
-      const student = JSON.parse(localStorage.getItem("student"));
-      const all = JSON.parse(localStorage.getItem("reports") || "[]");
-      return all
-        .filter((r) => r.studentId === student?.id)
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    }
-    const res = await fetch(`${API_BASE}/student/reports`);
-    if (!res.ok) throw new Error("Failed to fetch");
-    return res.json();
-  },
-  async listAdminReports() {
-    if (MOCK) {
-      const all = JSON.parse(localStorage.getItem("reports") || "[]");
-      return all.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    }
-    const res = await fetch(`${API_BASE}/admin/reports`);
-    if (!res.ok) throw new Error("Failed to fetch");
-    return res.json();
-  },
-  async assignReport(id) {
-    if (MOCK) {
-      const admin = JSON.parse(localStorage.getItem("admin"));
-      const all = JSON.parse(localStorage.getItem("reports") || "[]");
-      const i = all.findIndex((r) => r.id === id);
-      if (i >= 0) {
-        all[i].assignedTo = admin?.id;
-        all[i].status = "IN_PROGRESS";
-        localStorage.setItem("reports", JSON.stringify(all));
-        return all[i];
+      const rows = readMockComplaints();
+      const idx = rows.findIndex((row) => (row.status || "pending").toLowerCase() === "pending");
+      if (idx === -1) {
+        return { message: "No pending complaints for your area." };
       }
-      throw new Error("Not found");
+      rows[idx].status = "assigned";
+      rows[idx].assignedTo = "mock-employee";
+      rows[idx].updatedAt = new Date().toISOString();
+      writeMockComplaints(rows);
+      return { message: "Mock task assigned", complaint: normalizeComplaint(rows[idx]) };
     }
-    const res = await fetch(`${API_BASE}/admin/reports/${id}/assign`, { method: "POST" });
-    if (!res.ok) throw new Error("Assign failed");
-    return res.json();
+
+    const res = await fetch(`${API_BASE}/complaint/receiveComplaint`, {
+      method: "POST",
+      headers: buildAuthHeaders(token, { "Content-Type": "application/json" }),
+    });
+    const data = await parseJsonResponse(res, "Unable to fetch complaint");
+    return {
+      message: data.message,
+      complaint: normalizeComplaint(data),
+    };
   },
-  async uploadAfter(id, file) {
-    if (MOCK) {
-      const url = await fileToDataURL(file);
-      const all = JSON.parse(localStorage.getItem("reports") || "[]");
-      const i = all.findIndex((r) => r.id === id);
-      if (i >= 0) {
-        all[i].afterUrl = url;
-        all[i].status = "CLEANED";
-        all[i].cleanedAt = new Date().toISOString();
-        localStorage.setItem("reports", JSON.stringify(all));
-        return all[i];
-      }
-      throw new Error("Not found");
+  async submitWork({ token, complaintId, description, cleanedImg }) {
+    if (!MOCK) {
+      if (!token) throw new Error("Missing authentication token");
+      if (!complaintId) throw new Error("Complaint ID required");
+      if (!cleanedImg) throw new Error("Cleaned image is required");
     }
+
+    if (MOCK) {
+      if (!cleanedImg) throw new Error("Cleaned image is required");
+      const rows = readMockComplaints();
+      const idx = rows.findIndex((row) => String(row._id) === String(complaintId));
+      if (idx === -1) throw new Error("Complaint not found.");
+      const cleanedUrl = await fileToDataURL(cleanedImg);
+      rows[idx].status = "completed";
+      rows[idx].cleanedImgUrl = cleanedUrl;
+      rows[idx].resolvedAt = new Date().toISOString();
+      rows[idx].cleanlinessScore = 90 + Math.floor(Math.random() * 10);
+      writeMockComplaints(rows);
+      return {
+        message: "Work submitted (mock)",
+        complaintId: rows[idx]._id,
+        cleanlinessScore: rows[idx].cleanlinessScore,
+        resolvedAt: rows[idx].resolvedAt,
+        complaint: normalizeComplaint(rows[idx]),
+      };
+    }
+
     const fd = new FormData();
-    fd.append("afterImage", file);
-    const res = await fetch(`${API_BASE}/admin/reports/${id}/after`, { method: "POST", body: fd });
-    if (!res.ok) throw new Error("Upload failed");
-    return res.json();
+    fd.append("complaintId", complaintId);
+    if (description) fd.append("description", description);
+    fd.append("cleanedImg", cleanedImg);
+
+    const res = await fetch(`${API_BASE}/complaint/submitWork`, {
+      method: "POST",
+      headers: buildAuthHeaders(token),
+      body: fd,
+    });
+    const data = await parseJsonResponse(res, "Failed to submit work");
+    return {
+      message: data.message || "Work submitted successfully",
+      complaintId: data.complaintId,
+      cleanlinessScore: data.cleanlinessScore,
+      resolvedAt: data.resolvedAt,
+    };
   },
-  async runCompare(id) {
+  async listEmployeeComplaints({ token }) {
+    if (!token && !MOCK) throw new Error("Missing authentication token");
+
     if (MOCK) {
-      const all = JSON.parse(localStorage.getItem("reports") || "[]");
-      const i = all.findIndex((r) => r.id === id);
-      if (i >= 0) {
-        all[i].ai = {
-          cleanedPercent: 80 + Math.floor(Math.random() * 15),
-          summary: "AI: Significant trash reduction detected.",
-        };
-        localStorage.setItem("reports", JSON.stringify(all));
-        return all[i].ai;
-      }
-      throw new Error("Not found");
+      return readMockComplaints()
+        .map((row) => normalizeComplaint(row))
+        .filter(Boolean);
     }
-    const res = await fetch(`${API_BASE}/admin/reports/${id}/compare`, { method: "POST" });
-    if (!res.ok) throw new Error("Compare failed");
-    return res.json();
+
+    try {
+      const res = await fetch(`${API_BASE}/employee/dashboard`, {
+        method: "GET",
+        headers: buildAuthHeaders(token),
+      });
+      const data = await parseJsonResponse(res, "Failed to load complaints");
+      if (Array.isArray(data?.complaints)) {
+        return data.complaints.map((item) => normalizeComplaint(item)).filter(Boolean);
+      }
+      if (Array.isArray(data?.assignedComplaints)) {
+        return data.assignedComplaints.map((item) => normalizeComplaint(item)).filter(Boolean);
+      }
+      return [];
+    } catch (err) {
+      console.warn("Unable to load employee complaints", err);
+      return [];
+    }
+  },
+  async runComparison({ token, imageUrl }) {
+    if (!MOCK && !token) throw new Error("Missing authentication token");
+    if (!MOCK && !imageUrl) throw new Error("Image URL required for comparison");
+
+    if (MOCK) {
+      return { output: "Mock comparison complete" };
+    }
+
+    const res = await fetch(`${API_BASE}/roboflow/analyze`, {
+      method: "POST",
+      headers: buildAuthHeaders(token, { "Content-Type": "application/json" }),
+      body: JSON.stringify({ imageUrl }),
+    });
+    return parseJsonResponse(res, "AI comparison failed");
+  },
+  async getProfile({ token }) {
+    if (!MOCK) {
+      if (!token) throw new Error("Missing authentication token");
+    }
+
+    if (MOCK) {
+      const auth = readStoredAuth();
+      if (!auth) throw new Error("Not logged in");
+      return { message: "Mock profile", user: auth.user };
+    }
+
+    const res = await fetch(`${API_BASE}/profile`, {
+      method: "GET",
+      headers: buildAuthHeaders(token),
+    });
+    return parseJsonResponse(res, "Failed to fetch profile");
   },
 };
 
@@ -265,16 +490,17 @@ function fmtDate(iso) {
 /*************************
  * Auth Views
  *************************/
-function StudentLogin({ showToast }) {
-  const [email, setEmail] = useState("");
+function StudentLogin({ showToast, onAuth }) {
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const onSubmit = async () => {
-    if (!email || !password) return showToast("Email & password required");
+    if (!username || !password) return showToast("Username & password required");
     try {
       setLoading(true);
-      await api.studentLogin({ email, password });
+      const data = await api.studentLogin({ username, password });
+      onAuth?.(data);
       showToast("Logged in as Student");
       window.location.hash = "#student";
     } catch (e) {
@@ -289,8 +515,8 @@ function StudentLogin({ showToast }) {
       <div className="title">Student Login</div>
       <div className="muted">Use your institute email to continue.</div>
       <div className="section">
-        <label>Email</label>
-        <input className="input" placeholder="23CS01001@nitrkl.ac.in" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <label>Username</label>
+        <input className="input" placeholder="student123" value={username} onChange={(e) => setUsername(e.target.value)} />
         <label style={{ marginTop: 10 }}>Password</label>
         <input className="input" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
       </div>
@@ -302,16 +528,17 @@ function StudentLogin({ showToast }) {
   );
 }
 
-function AdminLogin({ showToast }) {
-  const [email, setEmail] = useState("");
+function AdminLogin({ showToast, onAuth }) {
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const onSubmit = async () => {
-    if (!email || !password) return showToast("Email & password required");
+    if (!username || !password) return showToast("Username & password required");
     try {
       setLoading(true);
-      await api.adminLogin({ email, password });
+      const data = await api.adminLogin({ username, password });
+      onAuth?.(data);
       showToast("Logged in as Admin");
       window.location.hash = "#admin";
     } catch (e) {
@@ -326,8 +553,8 @@ function AdminLogin({ showToast }) {
       <div className="title">Admin Login</div>
       <div className="muted">Admins/Social Workers only.</div>
       <div className="section">
-        <label>Email</label>
-        <input className="input" placeholder="clean-team@nitrkl.ac.in" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <label>Username</label>
+        <input className="input" placeholder="employee123" value={username} onChange={(e) => setUsername(e.target.value)} />
         <label style={{ marginTop: 10 }}>Password</label>
         <input className="input" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
       </div>
@@ -342,7 +569,7 @@ function AdminLogin({ showToast }) {
 /*************************
  * Student Dashboard
  *************************/
-function StudentDashboard({ showToast }) {
+function StudentDashboard({ showToast, auth, onLogout }) {
   const [locationVal, setLocationVal] = useState("");
   const [description, setDescription] = useState("");
   const [beforeFile, setBeforeFile] = useState(null);
@@ -350,21 +577,37 @@ function StudentDashboard({ showToast }) {
 
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState(null); // null = loading, [] = no data
+  const token = auth?.token || null;
+  const rollNumber = auth?.user?.username || "";
 
-  const loadHistory = useCallback(async () => {
+  if (!token) {
+    return (
+      <SectionPanel>
+        <div className="title">Student Dashboard</div>
+        <div className="muted">Please log in again to view your complaints.</div>
+        <div className="section">
+          <a className="btn" href="#student-login">Go to Student Login</a>
+        </div>
+      </SectionPanel>
+    );
+  }
+
+  const refreshHistory = useCallback(async () => {
     setHistory(null);
     try {
-      const data = await api.listStudentReports();
-      setHistory(data);
+      const complaints = await api.listStudentComplaints({ token });
+      const rows = complaints.map((item) => toReportRow(item)).filter(Boolean);
+      setHistory(rows);
     } catch (e) {
+      console.warn(e);
       setHistory([]);
       showToast(e.message);
     }
-  }, [showToast]);
+  }, [token, showToast]);
 
   useEffect(() => {
-    loadHistory();
-  }, [loadHistory]);
+    refreshHistory();
+  }, [refreshHistory]);
 
   const onSelectBefore = (file) => {
     if (!file) {
@@ -381,13 +624,26 @@ function StudentDashboard({ showToast }) {
     if (!locationVal || !beforeFile) return showToast("Location and image are required");
     try {
       setLoading(true);
-      await api.createReport({ location: locationVal.trim(), description: description.trim(), beforeFile });
+      const response = await api.submitComplaint({
+        token,
+        area: locationVal.trim(),
+        rollNo: rollNumber,
+        description: description.trim(),
+        proofImg: beforeFile,
+      });
       showToast("Complaint submitted");
       setLocationVal("");
       setDescription("");
       setBeforeFile(null);
       setBeforeUrl("");
-      await loadHistory();
+      if (response?.complaint) {
+        setHistory((prev) => {
+          const next = [toReportRow(response.complaint), ...(prev || []).filter(Boolean)];
+          return next.filter(Boolean);
+        });
+      } else {
+        await refreshHistory();
+      }
     } catch (e) {
       showToast(e.message);
     } finally {
@@ -402,7 +658,9 @@ function StudentDashboard({ showToast }) {
           <div className="title">Student Dashboard</div>
           <div className="muted">Upload a new complaint and track your history.</div>
         </div>
-        <span className="right helper"><a className="btn" href="#">Logout</a></span>
+        <span className="right helper">
+          <button className="btn ghost" onClick={onLogout}>Logout</button>
+        </span>
       </div>
 
       <div className="split section">
@@ -432,7 +690,7 @@ function StudentDashboard({ showToast }) {
             {history && history.length > 0 && (
               history.map((r) => (
                 <div className="row" key={r.id}>
-                  <img className="thumb" src={r.beforeUrl} alt="before" />
+                  <img className="thumb" src={r.beforeUrl || "https://via.placeholder.com/120x84?text=Before"} alt="before" />
                   <div>
                     <div className="flex">
                       <strong>{r.location}</strong>
@@ -462,31 +720,42 @@ function StudentDashboard({ showToast }) {
 /*************************
  * Admin Dashboard
  *************************/
-function AdminDashboard({ showToast }) {
+function AdminDashboard({ showToast, auth, onLogout }) {
   const [tab, setTab] = useState("all");
   const [allReports, setAllReports] = useState(null); // null=loading
   const [tick, setTick] = useState(0); // bump to refresh
+  const token = auth?.token || null;
 
-  const admin = useMemo(() => {
-    try { return JSON.parse(localStorage.getItem("admin")); } catch { return null; }
-  }, []);
+  if (!token) {
+    return (
+      <SectionPanel>
+        <div className="title">Admin Panel</div>
+        <div className="muted">Please log in as an employee to manage complaints.</div>
+        <div className="section">
+          <a className="btn" href="#admin-login">Go to Admin Login</a>
+        </div>
+      </SectionPanel>
+    );
+  }
 
   const loadAll = useCallback(async () => {
     setAllReports(null);
     try {
-      const data = await api.listAdminReports();
-      setAllReports(data);
+      const complaints = await api.listEmployeeComplaints({ token });
+      const rows = complaints.map((item) => toReportRow(item)).filter(Boolean);
+      setAllReports(rows);
     } catch (e) {
+      console.warn(e);
       showToast(e.message);
       setAllReports([]);
     }
-  }, [showToast]);
+  }, [token, showToast]);
 
   useEffect(() => { loadAll(); }, [loadAll, tick, tab]);
 
   const onTake = async (id) => {
     try {
-      await api.assignReport(id);
+      await api.receiveComplaint({ token });
       showToast("Task assigned to you");
       setTick((x) => x + 1);
     } catch (e) { showToast(e.message); }
@@ -495,7 +764,7 @@ function AdminDashboard({ showToast }) {
   const onUploadAfter = async (id, file) => {
     if (!file) return;
     try {
-      await api.uploadAfter(id, file);
+      await api.submitWork({ token, complaintId: id, description: "Uploaded AFTER image", cleanedImg: file });
       showToast("AFTER uploaded");
       setTick((x) => x + 1);
     } catch (e) { showToast(e.message); }
@@ -503,7 +772,11 @@ function AdminDashboard({ showToast }) {
 
   const onCompare = async (id) => {
     try {
-      await api.runCompare(id);
+      const target = allReports?.find((row) => row.id === id);
+      if (!target?.afterUrl) {
+        throw new Error("Upload an AFTER photo before running AI compare");
+      }
+      await api.runComparison({ token, imageUrl: target.afterUrl });
       showToast("AI compared");
       setTick((x) => x + 1);
     } catch (e) { showToast(e.message); }
@@ -511,8 +784,8 @@ function AdminDashboard({ showToast }) {
 
   const pastReports = useMemo(() => {
     if (!allReports) return null;
-    return allReports.filter((r) => r.status === "CLEANED" && r.assignedTo === admin?.id);
-  }, [allReports, admin]);
+    return allReports.filter((r) => r.status === "CLEANED");
+  }, [allReports]);
 
   return (
     <SectionPanel>
@@ -521,7 +794,9 @@ function AdminDashboard({ showToast }) {
           <div className="title">Admin Panel</div>
           <div className="muted">Pick tasks, upload AFTER photos, and view past work.</div>
         </div>
-        <span className="right helper"><a className="btn" href="#">Logout</a></span>
+        <span className="right helper">
+          <button className="btn ghost" onClick={onLogout}>Logout</button>
+        </span>
       </div>
 
       <div className="tabs section">
