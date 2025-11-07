@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 
+const KNOWN_ROUTES = new Set(["", "#student-login", "#admin-login", "#student", "#admin"]);
+
 export default function CleanSpotApp() {
   // ===== Toast =====
   const [toast, setToast] = useState("");
@@ -31,7 +33,7 @@ export default function CleanSpotApp() {
     persistAuth(null);
     setAuth(null);
     showToast("Logged out");
-    window.location.hash = "#";
+    window.location.hash = "";
   }, [showToast]);
 
   return (
@@ -44,7 +46,7 @@ export default function CleanSpotApp() {
         {route === "#admin-login" && <AdminLogin showToast={showToast} onAuth={updateAuth} />}
         {route === "#student" && <StudentDashboard showToast={showToast} auth={auth} onLogout={logout} />}
         {route === "#admin" && <AdminDashboard showToast={showToast} auth={auth} onLogout={logout} />}
-        {!("#", "#student-login", "#admin-login", "#student", "#admin").includes(route) && (
+        {!KNOWN_ROUTES.has(route) && (
           <NotFound />
         )}
       </main>
@@ -61,7 +63,7 @@ function Header() {
     <header>
       <div className="nav container">
         <div className="brand">
-          <div className="logo" aria-hidden>🧹</div>
+          <a href="#" className="logo" aria-hidden>🧹</a>
           <div>
             <div className="tag">CleanSpot · NIT Rourkela</div>
             <div className="helper">Report → Clean → Verify</div>
