@@ -267,10 +267,11 @@ const api = {
     if (MOCK) {
       const auth = readStoredAuth();
       const username = auth?.user?.username;
-      return readMockComplaints()
+      const complaints = readMockComplaints()
         .filter((row) => !username || row.studentId === username)
         .map((row) => normalizeComplaint(row))
         .filter(Boolean);
+      return { complaints, message: complaints.length ? null : "No complaints yet" };
     }
 
     try {
@@ -279,16 +280,16 @@ const api = {
         headers: buildAuthHeaders(token),
       });
       const data = await parseJsonResponse(res, "Failed to load complaints");
+      let complaints = [];
       if (Array.isArray(data?.complaints)) {
-        return data.complaints.map((item) => normalizeComplaint(item)).filter(Boolean);
+        complaints = data.complaints.map((item) => normalizeComplaint(item)).filter(Boolean);
+      } else if (Array.isArray(data?.reportedComplaints)) {
+        complaints = data.reportedComplaints.map((item) => normalizeComplaint(item)).filter(Boolean);
       }
-      if (Array.isArray(data?.reportedComplaints)) {
-        return data.reportedComplaints.map((item) => normalizeComplaint(item)).filter(Boolean);
-      }
-      return [];
+      return { complaints, message: data?.message || null };
     } catch (err) {
       console.warn("Unable to load student complaints", err);
-      return [];
+      return { complaints: [], message: "Unable to load complaints" };
     }
   },
   async submitComplaint({ token, area, rollNo, description, proofImg }) {
@@ -412,9 +413,10 @@ const api = {
     if (!token && !MOCK) throw new Error("Missing authentication token");
 
     if (MOCK) {
-      return readMockComplaints()
+      const complaints = readMockComplaints()
         .map((row) => normalizeComplaint(row))
         .filter(Boolean);
+      return { complaints, message: complaints.length ? null : "No complaints available" };
     }
 
     try {
@@ -423,16 +425,16 @@ const api = {
         headers: buildAuthHeaders(token),
       });
       const data = await parseJsonResponse(res, "Failed to load complaints");
+      let complaints = [];
       if (Array.isArray(data?.complaints)) {
-        return data.complaints.map((item) => normalizeComplaint(item)).filter(Boolean);
+        complaints = data.complaints.map((item) => normalizeComplaint(item)).filter(Boolean);
+      } else if (Array.isArray(data?.assignedComplaints)) {
+        complaints = data.assignedComplaints.map((item) => normalizeComplaint(item)).filter(Boolean);
       }
-      if (Array.isArray(data?.assignedComplaints)) {
-        return data.assignedComplaints.map((item) => normalizeComplaint(item)).filter(Boolean);
-      }
-      return [];
+      return { complaints, message: data?.message || null };
     } catch (err) {
       console.warn("Unable to load employee complaints", err);
-      return [];
+      return { complaints: [], message: "Unable to load complaints" };
     }
   },
   async runComparison({ token, imageUrl }) {
@@ -570,6 +572,7 @@ function AdminLogin({ showToast, onAuth }) {
  * Student Dashboard
  *************************/
 function StudentDashboard({ showToast, auth, onLogout }) {
+  const [rollNumber, setRollNumber] = useState(() => auth?.user?.username || "");
   const [locationVal, setLocationVal] = useState("");
   const [description, setDescription] = useState("");
   const [beforeFile, setBeforeFile] = useState(null);
@@ -578,8 +581,6 @@ function StudentDashboard({ showToast, auth, onLogout }) {
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState(null); // null = loading, [] = no data
   const token = auth?.token || null;
-  const rollNumber = auth?.user?.username || "";
-
   if (!token) {
     return (
       <SectionPanel>
@@ -621,13 +622,14 @@ function StudentDashboard({ showToast, auth, onLogout }) {
   };
 
   const onSubmit = async () => {
+    if (!rollNumber.trim()) return showToast("Roll number is required");
     if (!locationVal || !beforeFile) return showToast("Location and image are required");
     try {
       setLoading(true);
       const response = await api.submitComplaint({
         token,
         area: locationVal.trim(),
-        rollNo: rollNumber,
+        rollNo: rollNumber.trim(),
         description: description.trim(),
         proofImg: beforeFile,
       });
@@ -666,7 +668,9 @@ function StudentDashboard({ showToast, auth, onLogout }) {
       <div className="split section">
         <div className="card">
           <div className="title">New Complaint</div>
-          <div className="muted" style={{ marginBottom: 10 }}>Add location & BEFORE photo</div>
+          <div className="muted" style={{ marginBottom: 10 }}>Add roll number, location & BEFORE photo</div>
+          <label>Roll Number</label>
+          <input className="input" placeholder="123CS4567" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} />
           <label>Location</label>
           <input className="input" placeholder="Hall-4 back gate" value={locationVal} onChange={(e) => setLocationVal(e.target.value)} />
           <label>Description</label>
