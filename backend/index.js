@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import { PORT } from './src/config/env.js';
 import fileUpload from "express-fileupload";
 import { connectDatabase } from './src/config/database.js';
@@ -11,7 +12,7 @@ import roboflowRoutes from "./src/routes/robloxflowRoutes.js";
 
 const app = express();
 
-// Correct order:
+app.use(cors());
 app.use(
   fileUpload({
     useTempFiles: true,
