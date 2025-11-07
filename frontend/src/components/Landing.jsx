@@ -28,10 +28,10 @@ function Landing() {
         </div>
       </div>
       <div className="section flex" style={{ justifyContent: 'center' }}>
-        <a className="btn" href="#student-login">Student Login</a>
-        <a className="btn" href="#student-signup">Student Signup</a>
-        <a className="btn primary" href="#admin-login">Admin Login</a>
-        <a className="btn primary" href="#admin-signup">Admin Signup</a>
+        <a className="btn" href="/student-login">Student Login</a>
+        <a className="btn" href="/student-signup">Student Signup</a>
+        <a className="btn primary" href="/admin-login">Admin Login</a>
+        <a className="btn primary" href="/admin-signup">Admin Signup</a>
       </div>
     </SectionPanel>
   );

@@ -1,7 +1,9 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../api/index.js";
 
 function AdminSignup({ showToast, onAuth }) {
+  const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -17,7 +19,7 @@ function AdminSignup({ showToast, onAuth }) {
       const data = await api.adminRegister({ username, password, profile });
       onAuth?.(data);
       showToast("Registered and logged in as Admin");
-      window.location.hash = "#admin";
+      navigate("/admin");
     } catch (e) {
       showToast(e.message);
     } finally {
@@ -43,7 +45,7 @@ function AdminSignup({ showToast, onAuth }) {
       </div>
       <div className="flex">
         <button className="btn primary" onClick={onSubmit} disabled={loading}>{loading ? "Signing up..." : "Signup"}</button>
-        <a className="btn ghost" href="#">Back</a>
+        <a className="btn ghost" href="/">Back</a>
       </div>
     </section>
   );

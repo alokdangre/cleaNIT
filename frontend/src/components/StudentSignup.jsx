@@ -1,7 +1,9 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../api/index.js";
 
 function StudentSignup({ showToast, onAuth }) {
+  const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [rollNumber, setRollNumber] = useState("");
@@ -17,7 +19,7 @@ function StudentSignup({ showToast, onAuth }) {
       const data = await api.studentRegister({ username, password, profile });
       onAuth?.(data);
       showToast("Registered and logged in as Student");
-      window.location.hash = "#student";
+      navigate("/student");
     } catch (e) {
       showToast(e.message);
     } finally {
@@ -43,7 +45,7 @@ function StudentSignup({ showToast, onAuth }) {
       </div>
       <div className="flex">
         <button className="btn success" onClick={onSubmit} disabled={loading}>{loading ? "Signing up..." : "Signup"}</button>
-        <a className="btn ghost" href="#">Back</a>
+        <a className="btn ghost" href="/">Back</a>
       </div>
     </section>
   );

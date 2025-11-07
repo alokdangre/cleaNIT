@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
+import { Routes, Route } from "react-router-dom";
 import "./styles.css";
 import Header from "./components/Header.jsx";
 import Landing from "./components/Landing.jsx";
@@ -11,8 +12,6 @@ import AdminDashboard from "./components/AdminDashboard.jsx";
 import NotFound from "./components/NotFound.jsx";
 import { readStoredAuth, persistAuth } from "./utils/helpers.js";
 
-const KNOWN_ROUTES = new Set(["", "#student-login", "#admin-login", "#student-signup", "#admin-signup", "#student", "#admin"]);
-
 export default function CleanSpotApp() {
   // ===== Toast =====
   const [toast, setToast] = useState("");
@@ -22,14 +21,6 @@ export default function CleanSpotApp() {
     setShowToastFlag(true);
     window.clearTimeout((window)._toastT);
     (window)._toastT = window.setTimeout(() => setShowToastFlag(false), 2200);
-  }, []);
-
-  // ===== Hash Router =====
-  const [route, setRoute] = useState(() => window.location.hash || "");
-  useEffect(() => {
-    const onHash = () => setRoute(window.location.hash || "");
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
   // ===== Auth =====
@@ -44,21 +35,22 @@ export default function CleanSpotApp() {
     persistAuth(null);
     setAuth(null);
     showToast("Logged out");
-    window.location.hash = "";
   }, [showToast]);
 
   return (
     <div>
       <Header />
       <main className="container">
-        {route === "" && <Landing />}
-        {route === "#student-login" && <StudentLogin showToast={showToast} onAuth={updateAuth} />}
-        {route === "#admin-login" && <AdminLogin showToast={showToast} onAuth={updateAuth} />}
-        {route === "#student-signup" && <StudentSignup showToast={showToast} onAuth={updateAuth} />}
-        {route === "#admin-signup" && <AdminSignup showToast={showToast} onAuth={updateAuth} />}
-        {route === "#student" && <StudentDashboard showToast={showToast} auth={auth} onLogout={logout} />}
-        {route === "#admin" && <AdminDashboard showToast={showToast} auth={auth} onLogout={logout} />}
-        {!KNOWN_ROUTES.has(route) && <NotFound />}
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/student-login" element={<StudentLogin showToast={showToast} onAuth={updateAuth} />} />
+          <Route path="/admin-login" element={<AdminLogin showToast={showToast} onAuth={updateAuth} />} />
+          <Route path="/student-signup" element={<StudentSignup showToast={showToast} onAuth={updateAuth} />} />
+          <Route path="/admin-signup" element={<AdminSignup showToast={showToast} onAuth={updateAuth} />} />
+          <Route path="/student" element={<StudentDashboard showToast={showToast} auth={auth} onLogout={logout} />} />
+          <Route path="/admin" element={<AdminDashboard showToast={showToast} auth={auth} onLogout={logout} />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
       </main>
       <div className={`toast ${showToastFlag ? "show" : ""}`}>{toast}</div>
     </div>
