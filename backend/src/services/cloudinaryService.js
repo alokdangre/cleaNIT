@@ -5,7 +5,7 @@ export const uploader = async (file, folder, file_name, quality) => {
   if(quality) options.quality = quality;
   
   try {
-    const uploaded = await cloudinary.uploader.upload(file.tempFilePath, options);
+    const uploaded = await cloudinary.uploader.upload(file.data, options);
     return uploaded;
   } catch (error) {
     console.log(error);

@@ -57,6 +57,11 @@ const complaintSchema = new mongoose.Schema(
 
           cleanedImgPublicId :{
                type : String,
+          },
+
+          cleanlinessScore: {
+               type: Number,
+               default: null,
           }
      },
      {
