@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from "react";
 import api from "../api/index.js";
-import { fmtDate, fileToDataURL, toReportRow } from "../utils/helpers.js";
+import { fmtDate, toReportRow } from "../utils/helpers.js";
 
 function StudentDashboard({ showToast, auth, onLogout }) {
   const [rollNumber, setRollNumber] = useState(() => auth?.user?.username || "");

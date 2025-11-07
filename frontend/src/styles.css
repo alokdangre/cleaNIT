@@ -1,13 +1,13 @@
-:root{
+:root {
   --bg: #0b1020;         /* deep slate */
   --panel: #0f172a;      /* slate-900 */
   --muted: #94a3b8;      /* slate-400 */
   --text: #e5e7eb;       /* gray-200 */
   --brand: #4f46e5;      /* indigo-600 */
-  --brand-2:#22c55e;     /* green-500 */
-  --accent:#06b6d4;      /* cyan-500 */
-  --warn:#f59e0b;        /* amber-500 */
-  --danger:#ef4444;      /* red-500 */
+  --brand-2: #22c55e;     /* green-500 */
+  --accent: #06b6d4;      /* cyan-500 */
+  --warn: #f59e0b;        /* amber-500 */
+  --danger: #ef4444;      /* red-500 */
   --ring: rgba(99,102,241,.35);
   --card: #0b132f;
 }
@@ -15,10 +15,10 @@
 html,body,#root{height:100%}
 body{
   margin:0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji","Segoe UI Emoji";
-  background: radial-gradient(1200px 1200px at -10% -20%, rgba(79,70,229,.25), transparent 40%),
-              radial-gradient(1000px 800px at 120% 120%, rgba(34,197,94,.18), transparent 40%),
+  background: radial-gradient(ellipse 1200px 1200px at -10% -20%, rgba(79,70,229,.25), transparent 40%),
+              radial-gradient(ellipse 1000px 800px at 120% 120%, rgba(34,197,94,.18), transparent 40%),
               linear-gradient(180deg, #060913, #0a0f1f 40%, #0b1020 100%);
-  color:var(--text);
+  color: var(--text);
 }
 a{color:inherit;text-decoration:none}
 .container{max-width:1100px;margin:0 auto;padding:24px}

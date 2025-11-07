@@ -42,7 +42,7 @@ export default function CleanSpotApp() {
       <Header />
       <main className="container">
         <Routes>
-          <Route path="/" element={<Landing />} />
+          <Route index element={<Landing />} />
           <Route path="/student-login" element={<StudentLogin showToast={showToast} onAuth={updateAuth} />} />
           <Route path="/admin-login" element={<AdminLogin showToast={showToast} onAuth={updateAuth} />} />
           <Route path="/student-signup" element={<StudentSignup showToast={showToast} onAuth={updateAuth} />} />
