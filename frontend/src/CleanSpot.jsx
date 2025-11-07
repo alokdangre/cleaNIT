@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 
-const KNOWN_ROUTES = new Set(["", "#student-login", "#admin-login", "#student", "#admin"]);
+const KNOWN_ROUTES = new Set(["", "#student-login", "#admin-login", "#student-signup", "#admin-signup", "#student", "#admin"]);
 
 export default function CleanSpotApp() {
   // ===== Toast =====
@@ -44,6 +44,8 @@ export default function CleanSpotApp() {
         {route === "" && <Landing />}
         {route === "#student-login" && <StudentLogin showToast={showToast} onAuth={updateAuth} />}
         {route === "#admin-login" && <AdminLogin showToast={showToast} onAuth={updateAuth} />}
+        {route === "#student-signup" && <StudentSignup showToast={showToast} onAuth={updateAuth} />}
+        {route === "#admin-signup" && <AdminSignup showToast={showToast} onAuth={updateAuth} />}
         {route === "#student" && <StudentDashboard showToast={showToast} auth={auth} onLogout={logout} />}
         {route === "#admin" && <AdminDashboard showToast={showToast} auth={auth} onLogout={logout} />}
         {!KNOWN_ROUTES.has(route) && (
@@ -71,7 +73,9 @@ function Header() {
         </div>
         <div className="flex">
           <a href="#student-login" className="btn">Student Login</a>
+          <a href="#student-signup" className="btn">Student Signup</a>
           <a href="#admin-login" className="btn primary">Admin Login</a>
+          <a href="#admin-signup" className="btn primary">Admin Signup</a>
         </div>
       </div>
     </header>
@@ -96,23 +100,29 @@ function NotFound() {
 function Landing() {
   return (
     <SectionPanel>
+      <div style={{ textAlign: 'center', marginBottom: 30 }}>
+        <div className="title" style={{ fontSize: 32, marginBottom: 10 }}>Welcome to CleanSpot</div>
+        <div className="muted" style={{ fontSize: 18 }}>Keep NIT Rourkela clean together</div>
+      </div>
       <div className="grid grid-3">
-        <div className="card">
+        <div className="card" style={{ textAlign: 'center' }}>
           <div className="title">📸 Report dirty spots</div>
           <div className="muted">Upload location + BEFORE photo. Help keep the campus clean.</div>
         </div>
-        <div className="card">
+        <div className="card" style={{ textAlign: 'center' }}>
           <div className="title">🧑‍🔧 Clean & verify</div>
           <div className="muted">Admins/Social workers pick tasks, clean, and upload AFTER photos.</div>
         </div>
-        <div className="card">
+        <div className="card" style={{ textAlign: 'center' }}>
           <div className="title">🤖 AI comparison</div>
           <div className="muted">Backend AI compares images and quantifies cleanliness improvement.</div>
         </div>
       </div>
-      <div className="section flex">
-        <a className="btn" href="#student-login">Go to Student</a>
-        <a className="btn primary" href="#admin-login">Go to Admin</a>
+      <div className="section flex" style={{ justifyContent: 'center' }}>
+        <a className="btn" href="#student-login">Student Login</a>
+        <a className="btn" href="#student-signup">Student Signup</a>
+        <a className="btn primary" href="#admin-login">Admin Login</a>
+        <a className="btn primary" href="#admin-signup">Admin Signup</a>
       </div>
     </SectionPanel>
   );
@@ -262,6 +272,34 @@ const api = {
       throw new Error("Account is not registered as an employee");
     }
     return data;
+  },
+  async studentRegister({ username, password, profile }) {
+    if (MOCK) {
+      return {
+        token: "demo",
+        user: { id: "stu-001", username, role: "student" },
+      };
+    }
+    const res = await fetch(`${API_BASE}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password, role: "student", profile }),
+    });
+    return parseJsonResponse(res, "Registration failed");
+  },
+  async adminRegister({ username, password, profile }) {
+    if (MOCK) {
+      return {
+        token: "demo",
+        user: { id: "adm-001", username, role: "employee" },
+      };
+    }
+    const res = await fetch(`${API_BASE}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password, role: "employee", profile }),
+    });
+    return parseJsonResponse(res, "Registration failed");
   },
   async listStudentComplaints({ token }) {
     if (!token && !MOCK) throw new Error("Missing authentication token");
