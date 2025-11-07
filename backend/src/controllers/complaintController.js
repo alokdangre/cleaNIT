@@ -11,8 +11,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const submitComplaint = async (req, res) => {
-     console.log("req.files:", req.files);
-     console.log("req.body:", req.body);
+     console.log("req.files:", req.files)
+     console.log("req.body:", req.body)
      const { area, rollNo, description } = req.body;
      const { proofImg } = req.files;
      const folderName = area;
@@ -118,8 +118,7 @@ export const submitWork = async (req, res) => {
                return res.status(403).json({ message: "You are not assigned to this complaint." });
           }
 
-          const folderName = complaint.area;
-          const fileName = complaint.studentId + Date.now();
+          const { folderName, fileName } = complaint;
 
           // Upload cleaned image to Cloudinary
           const up = await uploader(cleanedImg, folderName, fileName);
