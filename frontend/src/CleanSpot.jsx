@@ -580,6 +580,7 @@ function StudentDashboard({ showToast, auth, onLogout }) {
 
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState(null); // null = loading, [] = no data
+  const [historyMessage, setHistoryMessage] = useState("");
   const token = auth?.token || null;
   if (!token) {
     return (
@@ -595,13 +596,16 @@ function StudentDashboard({ showToast, auth, onLogout }) {
 
   const refreshHistory = useCallback(async () => {
     setHistory(null);
+    setHistoryMessage("");
     try {
-      const complaints = await api.listStudentComplaints({ token });
-      const rows = complaints.map((item) => toReportRow(item)).filter(Boolean);
+      const { complaints, message } = await api.listStudentComplaints({ token });
+      const rows = (complaints || []).map((item) => toReportRow(item)).filter(Boolean);
       setHistory(rows);
+      setHistoryMessage(message || "");
     } catch (e) {
       console.warn(e);
       setHistory([]);
+      setHistoryMessage(e.message || "Unable to load complaints");
       showToast(e.message);
     }
   }, [token, showToast]);
@@ -646,6 +650,7 @@ function StudentDashboard({ showToast, auth, onLogout }) {
       } else {
         await refreshHistory();
       }
+      setHistoryMessage(response?.message || "");
     } catch (e) {
       showToast(e.message);
     } finally {
@@ -690,6 +695,7 @@ function StudentDashboard({ showToast, auth, onLogout }) {
           <div className="muted">Your previous complaints</div>
           <div className="section list" id="history">
             {history === null && <div className="helper">Loading...</div>}
+            {historyMessage && history && history.length === 0 && <div className="helper">{historyMessage}</div>}
             {history && history.length === 0 && <div className="helper">No complaints yet</div>}
             {history && history.length > 0 && (
               history.map((r) => (
@@ -729,6 +735,7 @@ function AdminDashboard({ showToast, auth, onLogout }) {
   const [allReports, setAllReports] = useState(null); // null=loading
   const [tick, setTick] = useState(0); // bump to refresh
   const token = auth?.token || null;
+  const [listMessage, setListMessage] = useState("");
 
   if (!token) {
     return (
@@ -744,14 +751,17 @@ function AdminDashboard({ showToast, auth, onLogout }) {
 
   const loadAll = useCallback(async () => {
     setAllReports(null);
+    setListMessage("");
     try {
-      const complaints = await api.listEmployeeComplaints({ token });
-      const rows = complaints.map((item) => toReportRow(item)).filter(Boolean);
+      const { complaints, message } = await api.listEmployeeComplaints({ token });
+      const rows = (complaints || []).map((item) => toReportRow(item)).filter(Boolean);
       setAllReports(rows);
+      setListMessage(message || "");
     } catch (e) {
       console.warn(e);
       showToast(e.message);
       setAllReports([]);
+      setListMessage(e.message || "Unable to load complaints");
     }
   }, [token, showToast]);
 
@@ -811,6 +821,7 @@ function AdminDashboard({ showToast, auth, onLogout }) {
       {tab === "all" && (
         <div id="tab-all">
           {allReports === null && <div className="section helper">Loading...</div>}
+          {listMessage && allReports && allReports.length === 0 && <div className="helper">{listMessage}</div>}
           {allReports && allReports.length === 0 && <div className="helper">No reports</div>}
           {allReports && allReports.length > 0 && (
             <div className="list section">
