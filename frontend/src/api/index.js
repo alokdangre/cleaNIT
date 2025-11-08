@@ -113,11 +113,16 @@ const api = {
     const data = await parseJsonResponse(res, "Failed to load complaints");
     let complaints = [];
     if (Array.isArray(data?.complaints)) {
-      complaints = data.complaints.map((item) => normalizeComplaint(item)).filter(Boolean);
+      complaints = data.complaints;
     } else if (Array.isArray(data?.assignedComplaints)) {
-      complaints = data.assignedComplaints.map((item) => normalizeComplaint(item)).filter(Boolean);
+      complaints = data.assignedComplaints;
+    } else if (Array.isArray(data)) {
+      complaints = data;
     }
-    return { complaints, message: data?.message || null };
+
+    const normalized = complaints.map((item) => normalizeComplaint(item)).filter(Boolean);
+
+    return { complaints: normalized, message: data?.message || null };
   },
   async runComparison({ token, imageUrl }) {
     const res = await fetch(`${API_BASE}/roboflow/analyze`, {

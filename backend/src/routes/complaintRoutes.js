@@ -3,7 +3,7 @@ import { submitComplaint, assignComplaintToEmployee, submitWork } from '../contr
 import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
 const router = express.Router();
 
-router.post('/submitComplaint', submitComplaint);
+router.post('/submitComplaint', authenticateToken, authorizeRoles('student'), submitComplaint);
 router.post('/receiveComplaint', authenticateToken, authorizeRoles('employee'), assignComplaintToEmployee);
 
 router.post('/submitWork', authenticateToken, authorizeRoles('employee'), submitWork);

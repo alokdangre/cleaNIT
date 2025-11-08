@@ -1,5 +1,6 @@
 import { Complaint } from "../models/complaintModel.js";
 import { EmployeeProfile } from "../models/employeeProfileModel.js";
+import { StudentProfile } from "../models/studentProfileModel.js";
 import { uploader } from "../services/cloudinaryService.js";
 import path from "path";
 import { spawn } from "child_process";
@@ -91,6 +92,74 @@ export const assignComplaintToEmployee = async (req, res) => {
                error: error.message,
           });
      }
+};
+
+export const getStudentDashboard = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const student = await StudentProfile.findOne({ user: userId });
+    console.log(student);
+    if (!student) {
+      return res.status(404).json({ message: "Student profile not found." });
+    }
+
+    const complaints = await Complaint.find({ studentId: student.rollNumber })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.status(200).json({
+      message: `Complaints reported by ${student.name || student.rollNumber}`,
+      complaints,
+    });
+  } catch (error) {
+    console.error("Error fetching student dashboard:", error);
+    return res.status(500).json({
+      message: "Failed to load student complaints",
+      error: error.message,
+    });
+  }
+};
+
+export const getEmployeeDashboard = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const employee = await EmployeeProfile.findOne({ user: userId });
+
+    if (!employee) {
+      return res.status(404).json({ message: "Employee profile not found." });
+    }
+
+    const [areaComplaints, assignedComplaints] = await Promise.all([
+      Complaint.find({
+        area: employee.areaAssigned,
+        status: { $in: ["pending", "assigned", "completed"] },
+      })
+        .sort({ createdAt: -1 })
+        .lean(),
+      Complaint.find({ assignedTo: employee._id })
+        .sort({ createdAt: -1 })
+        .lean(),
+    ]);
+
+    const combinedMap = new Map();
+    [...areaComplaints, ...assignedComplaints].forEach((complaint) => {
+      combinedMap.set(String(complaint._id), complaint);
+    });
+
+    const complaints = Array.from(combinedMap.values());
+
+    return res.status(200).json({
+      message: `Complaints for ${employee.areaAssigned}`,
+      complaints,
+      assignedComplaints,
+    });
+  } catch (error) {
+    console.error("Error fetching employee dashboard:", error);
+    return res.status(500).json({
+      message: "Failed to load complaints",
+      error: error.message,
+    });
+  }
 };
 
 export const submitWork = async (req, res) => {

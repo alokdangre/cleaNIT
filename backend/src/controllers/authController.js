@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { createEmployeeProfile, createStudentProfile } from '../services/profileService.js';
-import { createUser, findByUsername } from '../services/userService.js';
+import { createUser, deleteUserById, findByUsername } from '../services/userService.js';
 import { generateToken } from '../utils/token.js';
 
 const normalizeRole = (role) => role.toLowerCase();
@@ -64,9 +64,11 @@ export const register = async (req, res) => {
     return res.status(409).json({ message: 'Username already taken' });
   }
 
+  let newUser;
+
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = await createUser({ username, password: hashedPassword, role: normalizedRole });
+    newUser = await createUser({ username, password: hashedPassword, role: normalizedRole });
 
     if (normalizedRole === 'student') {
       await createStudentProfile({
@@ -95,6 +97,24 @@ export const register = async (req, res) => {
       user: { id: newUser.id, username, role: normalizedRole },
     });
   } catch (error) {
+    if (newUser) {
+      await deleteUserById(newUser.id);
+    }
+
+    console.error('Registration failed:', error);
+
+    if (error?.code === 11000) {
+      const duplicateFields = Object.keys(error.keyPattern || {});
+      const fieldList = duplicateFields.length ? duplicateFields.join(', ') : 'unique field';
+      return res.status(409).json({ message: `Duplicate value for ${fieldList}` });
+    }
+
+    if (error?.name === 'ValidationError') {
+      const validationMessages = Object.values(error.errors || {}).map((err) => err.message);
+      const message = validationMessages[0] || error.message || 'Validation failed';
+      return res.status(400).json({ message, errors: validationMessages });
+    }
+
     return res.status(500).json({ message: 'Unable to register user' });
   }
 };
