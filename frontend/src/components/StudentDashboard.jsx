@@ -3,7 +3,7 @@ import api from "../api/index.js";
 import { fmtDate, toReportRow } from "../utils/helpers.js";
 
 function StudentDashboard({ showToast, auth, onLogout }) {
-  const [rollNumber, setRollNumber] = useState(() => auth?.user?.username || "");
+  const [profile, setProfile] = useState(null);
   const [locationVal, setLocationVal] = useState("");
   const [description, setDescription] = useState("");
   const [beforeFile, setBeforeFile] = useState(null);
@@ -29,10 +29,11 @@ function StudentDashboard({ showToast, auth, onLogout }) {
     setHistory(null);
     setHistoryMessage("");
     try {
-      const { complaints, message } = await api.listStudentComplaints({ token });
+      const { complaints, message, student } = await api.listStudentComplaints({ token });
       const rows = (complaints || []).map((item) => toReportRow(item)).filter(Boolean);
       setHistory(rows);
       setHistoryMessage(message || "");
+      setProfile(student || null);
     } catch (e) {
       console.warn(e);
       setHistory([]);
@@ -57,14 +58,15 @@ function StudentDashboard({ showToast, auth, onLogout }) {
   };
 
   const onSubmit = async () => {
-    if (!rollNumber.trim()) return showToast("Roll number is required");
+    if (!profile?.rollNumber) {
+      return showToast("Unable to submit: student profile missing roll number");
+    }
     if (!locationVal || !beforeFile) return showToast("Location and image are required");
     try {
       setLoading(true);
       const response = await api.submitComplaint({
         token,
         area: locationVal.trim(),
-        rollNo: rollNumber.trim(),
         description: description.trim(),
         proofImg: beforeFile,
       });
@@ -104,9 +106,16 @@ function StudentDashboard({ showToast, auth, onLogout }) {
       <div className="split section">
         <div className="card">
           <div className="title">New Complaint</div>
-          <div className="muted" style={{ marginBottom: 10 }}>Add roll number, location & BEFORE photo</div>
-          <label>Roll Number</label>
-          <input className="input" placeholder="123CS4567" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} />
+          <div className="muted" style={{ marginBottom: 10 }}>Add location & BEFORE photo</div>
+          <div className="helper" style={{ marginBottom: 8 }}>
+            {profile ? (
+              <>
+                Logged in as <strong>{profile.name || profile.username || "Student"}</strong> (Roll {profile.rollNumber || "?"})
+              </>
+            ) : (
+              "Loading profile..."
+            )}
+          </div>
           <label>Location</label>
           <input className="input" placeholder="Hall-4 back gate" value={locationVal} onChange={(e) => setLocationVal(e.target.value)} />
           <label>Description</label>

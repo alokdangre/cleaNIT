@@ -43,6 +43,26 @@ const api = {
     });
     return parseJsonResponse(res, "Registration failed");
   },
+  async listPublicComplaints() {
+    const res = await fetch(`${API_BASE}/public/complaints`, {
+      method: "GET",
+    });
+    const data = await parseJsonResponse(res, "Failed to load public complaints");
+    const rawComplaints = Array.isArray(data?.complaints) ? data.complaints : Array.isArray(data) ? data : [];
+
+    const complaints = rawComplaints
+      .map((item) => {
+        const normalized = normalizeComplaint(item);
+        if (!normalized) return null;
+        return {
+          ...normalized,
+          student: item.student || null,
+        };
+      })
+      .filter(Boolean);
+
+    return { complaints, message: data?.message || null };
+  },
   async listStudentComplaints({ token }) {
     const res = await fetch(`${API_BASE}/student/dashboard`, {
       method: "GET",
@@ -55,12 +75,11 @@ const api = {
     } else if (Array.isArray(data?.reportedComplaints)) {
       complaints = data.reportedComplaints.map((item) => normalizeComplaint(item)).filter(Boolean);
     }
-    return { complaints, message: data?.message || null };
+    return { complaints, message: data?.message || null, student: data?.student || null };
   },
-  async submitComplaint({ token, area, rollNo, description, proofImg }) {
+  async submitComplaint({ token, area, description, proofImg }) {
     const fd = new FormData();
     fd.append("area", area);
-    fd.append("rollNo", rollNo);
     if (description) fd.append("description", description);
     fd.append("proofImg", proofImg);
 

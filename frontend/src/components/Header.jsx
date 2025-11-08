@@ -1,21 +1,36 @@
 import React from "react";
 
-function Header() {
+function Header({ auth, onLogout }) {
+  const isLoggedIn = Boolean(auth?.token);
+  const role = auth?.user?.role;
+  const dashboardHref = role === "employee" ? "/admin" : role === "student" ? "/student" : "/";
+
   return (
-    <header>
+    <header className="site-header">
       <div className="nav container">
         <div className="brand">
-          <a href="/" className="logo" aria-hidden>🧹</a>
+          <a href="/" className="logo" aria-label="CleanSpot home">🧹</a>
           <div>
-            <div className="tag">CleanSpot · NIT Rourkela</div>
-            <div className="helper">Report → Clean → Verify</div>
+            <div className="tag">CleanSpot</div>
+            <div className="helper">Keep NIT Rourkela spotless</div>
           </div>
         </div>
-        <div className="flex">
-          <a href="/student-login" className="btn">Student Login</a>
-          <a href="/student-signup" className="btn">Student Signup</a>
-          <a href="/admin-login" className="btn primary">Admin Login</a>
-          <a href="/admin-signup" className="btn primary">Admin Signup</a>
+
+        <nav className="nav-links">
+          <a href="/#about">About</a>
+          <a href="/#how-it-works">How it works</a>
+          <a href="/#complaints">Complaints</a>
+        </nav>
+
+        <div className="nav-actions">
+          {isLoggedIn ? (
+            <>
+              <a className="btn ghost" href={dashboardHref}>Dashboard</a>
+              <button type="button" className="btn" onClick={onLogout}>Logout</button>
+            </>
+          ) : (
+            <a className="btn primary" href="/auth">Log in / Sign up</a>
+          )}
         </div>
       </div>
     </header>

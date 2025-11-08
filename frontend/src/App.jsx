@@ -3,12 +3,9 @@ import { Routes, Route } from "react-router-dom";
 import "./styles.css";
 import Header from "./components/Header.jsx";
 import Landing from "./components/Landing.jsx";
-import StudentLogin from "./components/StudentLogin.jsx";
-import AdminLogin from "./components/AdminLogin.jsx";
-import StudentSignup from "./components/StudentSignup.jsx";
-import AdminSignup from "./components/AdminSignup.jsx";
 import StudentDashboard from "./components/StudentDashboard.jsx";
 import AdminDashboard from "./components/AdminDashboard.jsx";
+import AuthPortal from "./components/AuthPortal.jsx";
 import NotFound from "./components/NotFound.jsx";
 import { readStoredAuth, persistAuth } from "./utils/helpers.js";
 
@@ -39,14 +36,11 @@ export default function CleanSpotApp() {
 
   return (
     <div>
-      <Header />
+      <Header auth={auth} onLogout={logout} />
       <main className="container">
         <Routes>
-          <Route index element={<Landing />} />
-          <Route path="/student-login" element={<StudentLogin showToast={showToast} onAuth={updateAuth} />} />
-          <Route path="/admin-login" element={<AdminLogin showToast={showToast} onAuth={updateAuth} />} />
-          <Route path="/student-signup" element={<StudentSignup showToast={showToast} onAuth={updateAuth} />} />
-          <Route path="/admin-signup" element={<AdminSignup showToast={showToast} onAuth={updateAuth} />} />
+          <Route index element={<Landing auth={auth} />} />
+          <Route path="/auth" element={<AuthPortal auth={auth} showToast={showToast} onAuth={updateAuth} />} />
           <Route path="/student" element={<StudentDashboard showToast={showToast} auth={auth} onLogout={logout} />} />
           <Route path="/admin" element={<AdminDashboard showToast={showToast} auth={auth} onLogout={logout} />} />
           <Route path="*" element={<NotFound />} />

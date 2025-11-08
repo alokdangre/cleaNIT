@@ -2,6 +2,7 @@ import { Complaint } from "../models/complaintModel.js";
 import { EmployeeProfile } from "../models/employeeProfileModel.js";
 import { StudentProfile } from "../models/studentProfileModel.js";
 import { uploader } from "../services/cloudinaryService.js";
+import fs from "fs";
 import path from "path";
 import { spawn } from "child_process";
 import { getPythonPath } from "../utils/pythonPath.js";
@@ -15,23 +16,30 @@ export const submitComplaint = async (req, res) => {
   console.log("Incoming fields:", req.body);
   console.log("Files received:", Object.keys(req.files || {}));
 
-  const { area, rollNo, description, urgency = "low" } = req.body;
-  const proofImg = Array.isArray(req.files.proofImg)
+  const { area, description, urgency = "low" } = req.body;
+  const proofImg = Array.isArray(req.files?.proofImg)
     ? req.files.proofImg[0]
-    : req.files.proofImg;
+    : req.files?.proofImg;
 
   if (!area) return res.status(400).json({ message: "Area field is required." });
   if (!proofImg) return res.status(400).json({ message: "Proof image is required." });
-  if (!rollNo) return res.status(400).json({ message: "Roll Number field is required." });
 
   try {
+    const student = await StudentProfile.findOne({ user: req.user.id }).populate("user", "username");
+    if (!student) {
+      return res.status(404).json({ message: "Student profile not found." });
+    }
+
+    const rollNumber = student.rollNumber;
+    const studentUsername = student.user?.username || "";
+
     console.log("Uploading to Cloudinary...");
-    const up = await uploader(proofImg, area, rollNo + Date.now());
+    const up = await uploader(proofImg, area, `${rollNumber || "student"}-${Date.now()}`);
     console.log("Upload success:", up.secure_url);
 
     const complaint = await Complaint.create({
       area,
-      studentId: rollNo,
+      studentId: rollNumber,
       urgency,
       description,
       url: up.url,
@@ -42,12 +50,66 @@ export const submitComplaint = async (req, res) => {
       message: "Complaint submitted successfully",
       id: complaint._id,
       complaint,
+      student: {
+        rollNumber,
+        name: student.name,
+        username: studentUsername,
+      },
     });
   } catch (error) {
     console.error("Error in submitComplaint:", error);
     return res
       .status(500)
       .json({ message: "Error submitting complaint", error: error.message });
+  }
+};
+
+export const listPublicComplaints = async (_req, res) => {
+  try {
+    const complaints = await Complaint.find()
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    const rollNumbers = [...new Set(complaints.map((c) => c.studentId).filter(Boolean))];
+
+    const profiles = await StudentProfile.find({ rollNumber: { $in: rollNumbers } })
+      .populate("user", "username")
+      .lean();
+
+    const profileMap = new Map(
+      profiles.map((profile) => [profile.rollNumber, profile])
+    );
+
+    const shaped = complaints.map((complaint) => {
+      const profile = profileMap.get(complaint.studentId);
+      return {
+        id: complaint._id,
+        area: complaint.area,
+        description: complaint.description,
+        status: complaint.status,
+        createdAt: complaint.createdAt,
+        url: complaint.url,
+        cleanedImgUrl: complaint.cleanedImgUrl,
+        cleanlinessScore: complaint.cleanlinessScore,
+        student: profile
+          ? {
+              rollNumber: profile.rollNumber,
+              name: profile.name,
+              username: profile.user?.username || "",
+            }
+          : {
+              rollNumber: complaint.studentId || "",
+              name: "",
+              username: "",
+            },
+      };
+    });
+
+    return res.status(200).json({ complaints: shaped, count: shaped.length });
+  } catch (error) {
+    console.error("Error fetching public complaints:", error);
+    return res.status(500).json({ message: "Failed to load complaints", error: error.message });
   }
 };
 
@@ -110,6 +172,13 @@ export const getStudentDashboard = async (req, res) => {
     return res.status(200).json({
       message: `Complaints reported by ${student.name || student.rollNumber}`,
       complaints,
+      student: {
+        id: student._id,
+        rollNumber: student.rollNumber,
+        name: student.name,
+        email: student.email,
+        username: student.user?.username || "",
+      },
     });
   } catch (error) {
     console.error("Error fetching student dashboard:", error);
@@ -169,10 +238,14 @@ export const submitWork = async (req, res) => {
           console.log("req.body:", req.body);
           const userId = req.user.id;
           const { complaintId, description } = req.body;
-          const { cleanedImg } = req.files;
+          const { cleanedImg } = req.files || {};
 
           if (!complaintId || !description) {
                return res.status(400).json({ message: "Complaint ID and description are required." });
+          }
+
+          if (!cleanedImg) {
+               return res.status(400).json({ message: "AFTER image (cleanedImg) is required." });
           }
 
           const employee = await EmployeeProfile.findOne({ user: userId });
@@ -185,7 +258,8 @@ export const submitWork = async (req, res) => {
                return res.status(403).json({ message: "You are not assigned to this complaint." });
           }
 
-          const { folderName, fileName } = complaint;
+          const folderName = complaint.area || "complaints";
+          const fileName = complaint.fileName || `${complaint._id}-after-${Date.now()}`;
 
           // Upload cleaned image to Cloudinary
           const up = await uploader(cleanedImg, folderName, fileName);
@@ -197,57 +271,104 @@ export const submitWork = async (req, res) => {
           const scriptPath = path.join(__dirname, "../../scripts/robloxflowAnalysis.py");
           console.log("Resolved Python script path:", scriptPath);
 
+          if (!fs.existsSync(pythonPath)) {
+               console.error(`Python executable not found at ${pythonPath}`);
+               return res.status(503).json({
+                    message: "AI analysis unavailable: Python interpreter not found. Please set up the backend virtual environment.",
+               });
+          }
+
+          if (!fs.existsSync(scriptPath)) {
+               console.error(`Python analysis script missing at ${scriptPath}`);
+               return res.status(500).json({
+                    message: "AI analysis script is missing. Contact the administrator.",
+               });
+          }
+
           const imageUrl = up.url;
 
-          const process = spawn(pythonPath, [scriptPath, imageUrl]);
+          const analysisProcess = spawn(pythonPath, [scriptPath, imageUrl]);
 
           let output = "";
+          let responded = false;
 
-          process.stdout.on("data", (data) => {
+          const sendError = (status, body) => {
+               if (!responded) {
+                    responded = true;
+                    res.status(status).json(body);
+               }
+          };
+
+          const sendSuccess = (body) => {
+               if (!responded) {
+                    responded = true;
+                    res.status(200).json(body);
+               }
+          };
+
+          analysisProcess.stdout.on("data", (data) => {
                output += data.toString();
           });
 
-          process.stderr.on("data", (data) => {
+          analysisProcess.stderr.on("data", (data) => {
                console.error("Python error:", data.toString());
           });
 
-          process.on("close", async (code) => {
+          analysisProcess.on("error", (err) => {
+               console.error("Failed to start Python process:", err);
+               sendError(500, {
+                    message: "Image analysis could not start. Ensure Python is installed and accessible.",
+                    error: err.message,
+               });
+          });
+
+         analysisProcess.on("close", async (code) => {
+               if (responded) return;
+
                if (code !== 0) {
                     console.error(`Python exited with code ${code}`);
-                    return res.status(500).json({ message: "Image analysis failed." });
+                    return sendError(500, { message: "Image analysis failed." });
                }
+
                console.log("Python raw output:", output);
 
-               // Extract "Final Cleanliness% (after penalty) = 27.09%"
                const match = output.match(/Final Cleanliness%.*?=\s*([\d.]+)/i);
                const cleanlinessScore = match ? parseFloat(match[1]) : NaN;
 
-               if (isNaN(cleanlinessScore)) {
+               if (Number.isNaN(cleanlinessScore)) {
                     console.error("Could not parse cleanliness score from Python output:", output);
-                    return res.status(500).json({
+                    return sendError(500, {
                          message: "Invalid cleanliness score returned by analysis script.",
                          rawOutput: output,
                     });
                }
 
-               complaint.status = "completed";
-               complaint.resolvedAt = new Date();
-               complaint.cleanlinessScore = cleanlinessScore;
-               await complaint.save();
+               try {
+                    complaint.status = "completed";
+                    complaint.resolvedAt = new Date();
+                    complaint.cleanlinessScore = cleanlinessScore;
+                    await complaint.save();
 
-               employee.workDone.push({
-                    description,
-                    completedAt: new Date(),
-                    cleanlinessScore,
-               });
-               await employee.save();
+                    employee.workDone.push({
+                         description,
+                         completedAt: new Date(),
+                         cleanlinessScore,
+                    });
+                    await employee.save();
 
-               return res.status(200).json({
-                    message: "Work submitted successfully.",
-                    complaintId: complaint._id,
-                    cleanlinessScore,
-                    resolvedAt: complaint.resolvedAt,
-               });
+                    sendSuccess({
+                         message: "Work submitted successfully.",
+                         complaintId: complaint._id,
+                         cleanlinessScore,
+                         resolvedAt: complaint.resolvedAt,
+                    });
+               } catch (err) {
+                    console.error("Error saving work submission:", err);
+                    sendError(500, {
+                         message: "Error saving work submission.",
+                         error: err.message,
+                    });
+               }
           });
      } catch (error) {
           console.error(error);
