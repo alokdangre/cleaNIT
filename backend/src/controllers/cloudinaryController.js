@@ -1,4 +1,4 @@
-import { deleter, uploader } from "../services/cloudinaryService.js";
+import { uploader } from "../services/cloudinaryService.js";
 
 export const uploadHandler  = async (req, res) => {
   let img = req.files?.img;

@@ -1,8 +1,8 @@
 import { Complaint } from "../models/complaintModel.js";
 import { EmployeeProfile } from "../models/employeeProfileModel.js";
-import { uploader, deleter } from "../services/cloudinaryService.js";
+import { uploader } from "../services/cloudinaryService.js";
 import path from "path";
-import { exec, spawn } from "child_process";
+import { spawn } from "child_process";
 import { getPythonPath } from "../utils/pythonPath.js";
 import { fileURLToPath } from "url";
 
@@ -11,46 +11,44 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const submitComplaint = async (req, res) => {
-     console.log("req.files:", req.files)
-     console.log("req.body:", req.body)
-     const { area, rollNo, description } = req.body;
-     const { proofImg } = req.files;
-     const folderName = area;
-     const fileName = rollNo + Date.now();
+  console.log("Incoming fields:", req.body);
+  console.log("Files received:", Object.keys(req.files || {}));
 
-     const urgency = req.body.urgency || 'low';
-     if (!area) {
-          return res.status(400).json({ message: "Area field is required." });
-     }
+  const { area, rollNo, description, urgency = "low" } = req.body;
+  const proofImg = Array.isArray(req.files.proofImg)
+    ? req.files.proofImg[0]
+    : req.files.proofImg;
 
-     if (!proofImg) {
-          return res.status(400).json({ message: "Proof image is required." });
-     }
+  if (!area) return res.status(400).json({ message: "Area field is required." });
+  if (!proofImg) return res.status(400).json({ message: "Proof image is required." });
+  if (!rollNo) return res.status(400).json({ message: "Roll Number field is required." });
 
-     if (!rollNo) {
-          return res.status(400).json({ message: "Roll Number field is required." });
-     }
+  try {
+    console.log("Uploading to Cloudinary...");
+    const up = await uploader(proofImg, area, rollNo + Date.now());
+    console.log("Upload success:", up.secure_url);
 
-     try {
-          const up = await uploader(proofImg, folderName, fileName);
+    const complaint = await Complaint.create({
+      area,
+      studentId: rollNo,
+      urgency,
+      description,
+      url: up.url,
+      imagePublicId: up.public_id,
+    });
 
-          const complaint = await Complaint.create({
-               area: area,
-               studentId: rollNo,
-               urgency: urgency,
-               description: description,
-               url: up.url,
-               imagePublicId: up.public_id
-          });
-
-          res.status(201).json({
-               id: complaint._id,
-               complaint,
-          });
-     } catch (error) {
-          res.status(500).json({ message: "Error submitting complaint", error: error.message });
-     }
-}
+    return res.status(201).json({
+      message: "Complaint submitted successfully",
+      id: complaint._id,
+      complaint,
+    });
+  } catch (error) {
+    console.error("Error in submitComplaint:", error);
+    return res
+      .status(500)
+      .json({ message: "Error submitting complaint", error: error.message });
+  }
+};
 
 export const assignComplaintToEmployee = async (req, res) => {
      try {
